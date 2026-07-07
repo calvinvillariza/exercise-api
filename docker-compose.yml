@@ -1,0 +1,9 @@
+services:
+  exercise-api:
+    build: .
+    container_name: exercise-api
+    ports:
+      - "8686:8686"
+    environment:
+      - PORT=8686
+    restart: unless-stopped

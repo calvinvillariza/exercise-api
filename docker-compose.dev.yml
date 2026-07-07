@@ -1,0 +1,15 @@
+services:
+  exercise-api:
+    build:
+      context: .
+      target: dev
+    container_name: exercise-api-dev
+    ports:
+      - "8686:8686"
+    environment:
+      - PORT=8686
+    volumes:
+      - ./src:/app/src
+      - ./tsconfig.json:/app/tsconfig.json
+      - /app/node_modules
+    command: npm run dev
