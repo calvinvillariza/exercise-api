@@ -29,9 +29,11 @@ npm start       # run the compiled build (dist/server.js)
 
 ## API
 
-| Method | Path                          | Description                                |
-| ------ | ----------------------------- | ------------------------------------------- |
-| GET    | `/api/exercise/event-loop`    | Logs event loop ordering (sync, timer, microtask) to the server console |
+| Method | Path                              | Description                                |
+| ------ | ---------------------------------- | ------------------------------------------- |
+| GET    | `/api/exercise/event-loop`         | Logs event loop ordering (sync, timer, microtask) to the server console |
+| GET    | `/api/exercise/cpu-heavy`          | Runs a naive, synchronous prime count up to `?limit` (default 200000), blocking the event loop for the duration |
+| GET    | `/api/exercise/generic-constrain`  | Validates `?input` as a number in `[0, 150]`; returns `{ ok, value }` or `{ ok, error }` |
 
 ## Docker
 
@@ -59,8 +61,10 @@ docker compose -f docker-compose.dev.yml up --build
 src/
   config/env.ts              # environment variable loading
   controllers/                # request handlers
+  helpers/result.helper.ts    # Result<T, E> combinators (e.g. mapResult)
   middleware/errorHandler.ts  # centralized error handler
   routes/                     # route definitions
+  types/result.ts             # Result<T, E> discriminated union type
   app.ts                      # express app setup (middleware, routes)
   server.ts                   # entrypoint, starts the HTTP server
 ```

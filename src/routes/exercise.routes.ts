@@ -5,5 +5,6 @@ const exerciseRouter = Router();
 
 exerciseRouter.get("/event-loop", ExerciseController.getNodeEventLoop);
 exerciseRouter.get("/cpu-heavy", ExerciseController.getCpuHeavy);
+exerciseRouter.get("/generic-constrain", ExerciseController.genericConstrain);
 
 export default exerciseRouter;
