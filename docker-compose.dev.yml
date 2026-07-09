@@ -11,5 +11,6 @@ services:
     volumes:
       - ./src:/app/src
       - ./tsconfig.json:/app/tsconfig.json
+      - ./storage:/app/storage
       - /app/node_modules
     command: npm run dev

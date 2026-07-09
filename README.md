@@ -34,6 +34,8 @@ npm start       # run the compiled build (dist/server.js)
 | GET    | `/api/exercise/event-loop`         | Logs event loop ordering (sync, timer, microtask) to the server console |
 | GET    | `/api/exercise/cpu-heavy`          | Runs a naive, synchronous prime count up to `?limit` (default 200000), blocking the event loop for the duration |
 | GET    | `/api/exercise/generic-constrain`  | Validates `?input` as a number in `[0, 150]`; returns `{ ok, value }` or `{ ok, error }` |
+| GET    | `/api/exercise/file-io`            | Copies `storage/big-file.txt` via naive buffering and via `.pipe()` streams, returning both durations |
+| GET    | `/storage/<filename>`              | Serves static files placed in the `storage/` directory |
 
 ## Docker
 
@@ -67,4 +69,5 @@ src/
   types/result.ts             # Result<T, E> discriminated union type
   app.ts                      # express app setup (middleware, routes)
   server.ts                   # entrypoint, starts the HTTP server
+storage/                      # static files served at /storage (gitignored, .gitkeep only)
 ```
