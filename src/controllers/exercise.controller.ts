@@ -3,6 +3,8 @@ import path from "path";
 import { Request, Response } from "express";
 import { mapResult } from "../helpers/result.helper";
 import { Result } from "../types/result";
+import { cache } from "../cache";
+import { DB_Product } from "../db/product";
 
 const STORAGE_DIR = path.join(__dirname, "..", "..", "storage");
 
@@ -152,7 +154,10 @@ const copyBuffered = (inputPath: string, outputPath: string): number => {
  * falls behind, it pauses the readable side until the write buffer drains,
  * so a slow destination can't cause unbounded memory growth.
  */
-const copyStreamed = (inputPath: string, outputPath: string): Promise<number> => {
+const copyStreamed = (
+  inputPath: string,
+  outputPath: string,
+): Promise<number> => {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const readStream = fs.createReadStream(inputPath);
@@ -197,9 +202,95 @@ const getFileIo = async (req: Request, res: Response) => {
   res.status(200).json(results);
 };
 
+/**
+ * Demonstrates cache-aside (lazy-loading) caching: the handler itself decides
+ * when to populate the cache, rather than the cache sitting transparently in
+ * front of every read.
+ *
+ * 1. On each request, `cache.get` is checked first for `product_<id>`. A hit
+ *    returns immediately with `source: "cache"` — no DB call, no simulated
+ *    `DB_LATENCY_MS` (2000ms) delay from `DB_Product.getProductById`.
+ * 2. On a miss, the product is fetched from the DB (paying the full
+ *    latency), then written into the cache with a 10s TTL via `cache.set`
+ *    before the response is sent with `source: "db"`.
+ * 3. Because the cache is a plain in-memory `Map` (see `../cache`), it is
+ *    process-local: it will not be shared across multiple app instances, and
+ *    it is wiped on restart.
+ *
+ * Compare the `durationMs` logged on a cache hit vs. a miss to see the
+ * latency the cache is saving.
+ */
+const getProduct = async (req: Request, res: Response) => {
+  const id = +req.params.id;
+  const start = Date.now();
+  const cache_key = `product_${id}`;
+
+  const cached = cache.get(cache_key);
+
+  if (cached) {
+    console.log(`[CACHE HIT]  product ${id} served in ${Date.now() - start}ms`);
+    return res.json({ source: "cache", ...cached });
+  }
+
+  const product = await DB_Product.getProductById(id);
+
+  if (!product) return res.status(404).json({ error: "not found" });
+
+  cache.set(cache_key, product, 10_000);
+  console.log(
+    `[CACHE MISS] product ${id} fetched from DB in ${Date.now() - start}ms, now cached`,
+  );
+
+  return res.status(200).json({
+    source: "db",
+    ...product,
+  });
+};
+
+/**
+ * Demonstrates cache invalidation on write: this is the "write-through
+ * invalidate" half of the cache-aside pattern used by `getProduct` above.
+ *
+ * The DB is updated directly via `DB_Product.updateDirectly`, then
+ * `cache.invalidate` deletes the now-stale `product_<id>` entry so the next
+ * `getProduct` call is forced to miss and re-fetch fresh data from the DB
+ * rather than serving the old cached value for up to its remaining TTL.
+ *
+ * Skipping this invalidation step is a classic cause of stale-read bugs:
+ * without it, a client could keep seeing pre-update data for up to 10s (the
+ * TTL set in `getProduct`) after a successful write.
+ */
+const updateProduct = async (req: Request, res: Response) => {
+  const id = +req.params.id;
+  const updated = await DB_Product.updateDirectly(id, req.body);
+
+  cache.invalidate(`product_${id}`);
+
+  console.log(`[WRITE] product ${id} updated via the app's API`);
+
+  res.status(200).json(updated);
+};
+
+/**
+ * Exposes the entire in-memory cache store for inspection (see
+ * `cache.debugDump` in `../cache`), returning every key's cached value
+ * alongside `msRemaining` — how long until that entry's TTL expires.
+ *
+ * Useful for observing the cache-aside behavior in `getProduct`/
+ * `updateProduct` directly: e.g. confirm a `product_<id>` entry appears
+ * after a cache miss, and disappears immediately after an update.
+ * Debug-only — a real API would never expose its full cache contents.
+ */
+const debugCache = async (req: Request, res: Response) => {
+  res.status(200).json(cache.debugDump());
+};
+
 export const ExerciseController = {
   getNodeEventLoop,
   getCpuHeavy,
   genericConstrain,
   getFileIo,
+  getProduct,
+  updateProduct,
+  debugCache,
 };
