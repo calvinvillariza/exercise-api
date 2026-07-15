@@ -12,7 +12,10 @@ const delay = (ms: number) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
+let callCount = 0;
 const getProductById = async (id: number) => {
+  callCount++;
+  console.log(`DB CALL #${callCount} for product ${id}`);
   await delay(DB_LATENCY_MS);
 
   const product = products[id];

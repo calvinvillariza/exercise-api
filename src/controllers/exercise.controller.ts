@@ -5,6 +5,7 @@ import { mapResult } from "../helpers/result.helper";
 import { Result } from "../types/result";
 import { cache } from "../cache";
 import { DB_Product } from "../db/product";
+import { Inflight } from "../in-flight";
 
 const STORAGE_DIR = path.join(__dirname, "..", "..", "storage");
 
@@ -216,6 +217,13 @@ const getFileIo = async (req: Request, res: Response) => {
  * 3. Because the cache is a plain in-memory `Map` (see `../cache`), it is
  *    process-local: it will not be shared across multiple app instances, and
  *    it is wiped on restart.
+ * 4. The DB fetch on a miss is wrapped in `Inflight.coalesce` (see
+ *    `../in-flight`), keyed on `cache_key`. If several requests miss the
+ *    cache for the same product before the first DB call resolves, they all
+ *    share that one in-flight call instead of each issuing their own —
+ *    without this, a burst of concurrent requests for a not-yet-cached
+ *    product would each pay the full `DB_LATENCY_MS` and hit the DB
+ *    redundantly.
  *
  * Compare the `durationMs` logged on a cache hit vs. a miss to see the
  * latency the cache is saving.
@@ -232,7 +240,9 @@ const getProduct = async (req: Request, res: Response) => {
     return res.json({ source: "cache", ...cached });
   }
 
-  const product = await DB_Product.getProductById(id);
+  const product = await Inflight.coalesce(cache_key, () =>
+    DB_Product.getProductById(id),
+  );
 
   if (!product) return res.status(404).json({ error: "not found" });
 
