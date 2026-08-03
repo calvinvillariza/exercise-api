@@ -4,6 +4,8 @@ import { PORT } from "./config/env";
 import { EventEmitter } from "stream";
 import { WebSocketModule } from "./websocket";
 
+const port = PORT ?? "3000";
+
 const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
