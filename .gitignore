@@ -3,4 +3,3 @@
 /storage/*
 !/storage/.gitkeep
 /.claude
-/external
