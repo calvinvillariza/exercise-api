@@ -1,6 +1,14 @@
+import * as WebSocket from "ws";
 import app from "./app";
 import { PORT } from "./config/env";
+import { EventEmitter } from "stream";
+import { WebSocketModule } from "./websocket";
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+const wss = new WebSocket.Server({ server });
+const eventEmitter = new EventEmitter();
+
+WebSocketModule.runWebSocket(wss, eventEmitter, +PORT);

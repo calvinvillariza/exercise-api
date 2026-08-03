@@ -1,6 +1,6 @@
 # exercise-api
 
-Small Express + TypeScript API used to demonstrate Node.js concepts: the event loop, CPU-bound blocking, file I/O, and in-memory caching.
+Small Express + TypeScript API used to demonstrate Node.js concepts: the event loop, CPU-bound blocking, file I/O, in-memory caching, and WebSocket broadcasting via `EventEmitter`.
 
 ## Requirements
 
@@ -40,6 +40,14 @@ npm start       # run the compiled build (dist/server.js)
 | GET    | `/api/exercise/cache/debug-dump`   | Dumps the full in-memory cache store, including remaining TTL per key |
 | GET    | `/storage/<filename>`              | Serves static files placed in the `storage/` directory |
 
+## WebSocket
+
+The HTTP server also accepts WebSocket upgrades on the same port, e.g. `ws://localhost:8686`.
+
+On connection, the server subscribes the client to an `EventEmitter` that broadcasts a simulated price update (`{ price, ts }`) every 500ms; each client receives updates tagged with its own `clientId`. On disconnect, the client's listener is removed from the emitter.
+
+Every 3s the server logs the current `update` listener count and process heap usage to the console — useful for observing listener buildup/cleanup and memory behavior as clients connect and disconnect.
+
 ## Docker
 
 ### Production image
@@ -73,7 +81,8 @@ src/
   routes/                     # route definitions
   types/product.ts            # Product type
   types/result.ts             # Result<T, E> discriminated union type
+  websocket.ts                 # WebSocket server: EventEmitter-based price update broadcast
   app.ts                      # express app setup (middleware, routes)
-  server.ts                   # entrypoint, starts the HTTP server
+  server.ts                   # entrypoint, starts the HTTP server + WebSocket server
 storage/                      # static files served at /storage (gitignored, .gitkeep only)
 ```

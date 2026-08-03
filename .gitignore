@@ -2,3 +2,5 @@
 /dist
 /storage/*
 !/storage/.gitkeep
+/.claude
+/external

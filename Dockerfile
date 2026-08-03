@@ -23,4 +23,4 @@ COPY storage ./storage
 
 EXPOSE 8686
 USER node
-CMD ["node", "dist/server.js"]
+CMD ["node", "--expose-gc", "dist/server.js"]
