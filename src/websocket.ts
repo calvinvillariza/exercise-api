@@ -13,7 +13,7 @@ const runWebSocket = (
 ) => {
   eventEmitter.setMaxListeners(1000);
 
-  setInterval(() => {
+  const broadcastInterval = setInterval(() => {
     eventEmitter.emit("update", { price: Math.random() * 100, ts: Date.now() });
   }, 500);
 
@@ -50,7 +50,7 @@ const runWebSocket = (
     });
   });
 
-  setInterval(() => {
+  const statusInterval = setInterval(() => {
     if (global.gc) global.gc();
 
     const heapUsed = process.memoryUsage().heapUsed;
@@ -61,7 +61,13 @@ const runWebSocket = (
     );
   }, 3000);
 
-  return wss;
+  const stop = () => {
+    clearInterval(broadcastInterval);
+    clearInterval(statusInterval);
+    wss.clients.forEach((client) => client.terminate());
+  };
+
+  return { wss, stop };
 };
 
 export const WebSocketModule = {

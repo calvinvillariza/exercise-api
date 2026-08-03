@@ -9,7 +9,7 @@ EXPOSE 8686
 CMD ["npm", "run", "dev"]
 
 FROM deps AS build
-COPY tsconfig.json ./
+COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 RUN npm run build
 
@@ -23,4 +23,6 @@ COPY storage ./storage
 
 EXPOSE 8686
 USER node
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:8686/healthz', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 CMD ["node", "--expose-gc", "dist/server.js"]
