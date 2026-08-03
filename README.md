@@ -48,6 +48,16 @@ On connection, the server subscribes the client to an `EventEmitter` that broadc
 
 Every 3s the server logs the current `update` listener count and process heap usage to the console — useful for observing listener buildup/cleanup and memory behavior as clients connect and disconnect.
 
+### Simulating client load
+
+`external/websocket-simulate-client.js` connects the server to a real (non-browser) WebSocket client for observation, without needing a UI. It opens waves of 20 short-lived connections against `ws://localhost:8686` every 2s (each connection closes after 1s), so you can watch the server's listener-count/heap logs rise and fall as each wave connects and disconnects.
+
+Run the server first, then in a separate terminal:
+
+```bash
+node external/websocket-simulate-client.js
+```
+
 ## Docker
 
 ### Production image
@@ -85,4 +95,6 @@ src/
   app.ts                      # express app setup (middleware, routes)
   server.ts                   # entrypoint, starts the HTTP server + WebSocket server
 storage/                      # static files served at /storage (gitignored, .gitkeep only)
+external/
+  websocket-simulate-client.js # standalone script that opens waves of short-lived WS connections against the server
 ```
