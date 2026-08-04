@@ -32,6 +32,7 @@ npm test             # node:test, via tsx
 
 | Method | Path                              | Description                                                                                                                                            |
 | ------ | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/`                               | Renders this README as an HTML page — the default view when visiting the deployed URL in a browser                                                    |
 | GET    | `/healthz`                        | Health check: `{ status: "ok", uptime }`                                                                                                               |
 | GET    | `/api/exercise/event-loop`        | Logs event loop ordering (sync, timer, microtask) to the server console                                                                                |
 | GET    | `/api/exercise/cpu-heavy`         | Runs a naive, synchronous prime count up to `?limit` (default 200000), blocking the event loop for the duration                                        |

@@ -20,6 +20,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY storage ./storage
+COPY README.md ./
 
 EXPOSE 8686
 USER node

@@ -6,6 +6,7 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import { errorHandler } from "./middleware/errorHandler";
 import exerciseRouter from "./routes/exercise.routes";
+import { HomeController } from "./controllers/home.controller";
 import { IS_PRODUCTION } from "./config/env";
 
 const app = express();
@@ -14,6 +15,8 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 app.use(morgan(IS_PRODUCTION ? "combined" : "dev"));
+
+app.get("/", HomeController.getHome);
 
 app.get("/healthz", (req, res) => {
   res.status(200).json({ status: "ok", uptime: process.uptime() });

@@ -3,6 +3,16 @@ import assert from "node:assert/strict";
 import request from "supertest";
 import app from "./app";
 
+describe("GET /", () => {
+  it("renders the README as HTML", async () => {
+    const res = await request(app).get("/");
+
+    assert.equal(res.status, 200);
+    assert.match(res.headers["content-type"], /html/);
+    assert.match(res.text, /<h1[^>]*>exercise-api<\/h1>/);
+  });
+});
+
 describe("GET /healthz", () => {
   it("reports ok status", async () => {
     const res = await request(app).get("/healthz");
