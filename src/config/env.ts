@@ -3,7 +3,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const parsePort = (value: string | undefined): number => {
-  const port = Number(value ?? 3000);
+  const port = Number(value && value.trim() !== "" ? value : 3000);
 
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error(`Invalid PORT: "${value}"`);

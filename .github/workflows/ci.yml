@@ -49,3 +49,18 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/exercise-api:latest
             ghcr.io/${{ github.repository_owner }}/exercise-api:${{ github.sha }}
+
+  deploy:
+    needs: publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL secret not set yet; skipping deploy trigger."
+            exit 0
+          fi
+          curl -fsS -X POST "$DEPLOY_HOOK_URL"
