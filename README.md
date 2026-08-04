@@ -55,12 +55,15 @@ Every 3s the server logs the current `update` listener count and process heap us
 
 ### Simulating client load
 
-`external/websocket-simulate-client.js` connects the server to a real (non-browser) WebSocket client for observation, without needing a UI. It opens waves of 20 short-lived connections against `ws://localhost:8686` every 2s (each connection closes after 1s), so you can watch the server's listener-count/heap logs rise and fall as each wave connects and disconnects. This is a local dev/debugging tool only — it's not part of the API and is excluded from the Docker build (see `.dockerignore`).
+`external/websocket-simulate-client.js` connects the server to a real (non-browser) WebSocket client for observation, without needing a UI. It opens waves of 20 short-lived connections every 2s (each connection closes after 1s), so you can watch the server's listener-count/heap logs rise and fall as each wave connects and disconnects. This is a local dev/debugging tool only — it's not part of the API and is excluded from the Docker build (see `.dockerignore`).
+
+By default it targets `ws://localhost:8686`; set `NODE_ENV=production` to point it at the live Render deployment (`wss://exercise-api-latest.onrender.com`) instead.
 
 Run the server first, then in a separate terminal:
 
 ```bash
-node external/websocket-simulate-client.js
+node external/websocket-simulate-client.js                    # local
+NODE_ENV=production node external/websocket-simulate-client.js # live deployment
 ```
 
 ## Docker
