@@ -6,6 +6,7 @@ import { Result } from "../types/result";
 import { cache } from "../cache";
 import { DB_Product } from "../db/product";
 import { Inflight } from "../in-flight";
+import { Order } from "../types/order";
 
 const STORAGE_DIR = path.join(__dirname, "..", "..", "storage");
 
@@ -295,6 +296,68 @@ const debugCache = async (req: Request, res: Response) => {
   res.status(200).json(cache.debugDump());
 };
 
+/**
+ * Demonstrates why a discriminated union (`Order`, in `../types/order`) is
+ * safer than a flat interface with optional fields (`IOrder`, in
+ * `../interfaces/IOrder`) for modeling a value whose shape depends on its
+ * own state.
+ *
+ * `Order` is `{ status: "pending"; id } | { status: "shipped"; id;
+ * trackingNumber }` — `trackingNumber` only exists on the `"shipped"` member.
+ * Switching on `order.status` lets TypeScript narrow the union per branch:
+ * in the `"pending"` case `order.trackingNumber` is a compile error (the
+ * property isn't there), and in the `"shipped"` case `order.trackingNumber`
+ * is a plain, definitely-defined `string` — no `!`, no optional chaining.
+ *
+ * `IOrder` instead models the same data as `{ id; status; trackingNumber?:
+ * string }`. That compiles for both statuses, but it means
+ * `trackingNumber` is `string | undefined` everywhere, even in code that
+ * "knows" the order has shipped. The commented-out line below is what that
+ * forces in practice: a developer reaches for the `!` non-null assertion to
+ * silence the compiler instead of checking `status` first. TypeScript can't
+ * verify that promise — if it's ever wrong (e.g. a shipped order was
+ * created without a tracking number), the `!` turns what would've been a
+ * caught-at-compile-time bug into a runtime `undefined` bug.
+ */
+const typeDiscriminatedUnion = async (req: Request, res: Response) => {
+  const order: Order = req.body;
+
+  let message = "";
+
+  /** We MUST narrow on `status` before trackingNumber is even visible to us —
+   * TypeScript will not let us access `order.trackingNumber` in the "pending"
+   * branch, because that property doesn't exist on that branch of the union.
+   */
+  switch (order.status) {
+    case "pending":
+      message = `Order #${order.id} has not shipped yet — no label to print.`;
+      break;
+    case "shipped":
+      /** Inside this branch, TS KNOWS order.trackingNumber is a real string.
+       * No `!`, no optional chaining, no runtime risk — just a normal property.
+       */
+      message = `Shipping label for order #${order.id}: tracking ${order.trackingNumber.toUpperCase()}`;
+      break;
+  }
+
+  /** Using IOrder
+   * TypeScript's strict null checks WILL warn here, because trackingNumber
+   * is `string | undefined`. This is realistic: a developer confident that
+   * "shipped orders always have tracking" silences the warning with `!`
+   * (the non-null assertion) instead of actually checking `status` first.
+   * That `!` is a promise to the compiler: "trust me, this is never undefined."
+   * The type system has no way to verify that promise is true.
+   */
+  // const message = `Shipping label for order #${order.id}: tracking ${order.trackingNumber!.toUpperCase()}`;
+
+  console.log("Attempting to print a shipping label for a pending order...");
+  console.log(message);
+
+  res.status(200).json({
+    message,
+  });
+};
+
 export const ExerciseController = {
   getNodeEventLoop,
   getCpuHeavy,
@@ -303,4 +366,5 @@ export const ExerciseController = {
   getProduct,
   updateProduct,
   debugCache,
+  typeDiscriminatedUnion,
 };

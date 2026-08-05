@@ -41,6 +41,7 @@ npm test             # node:test, via tsx
 | GET    | `/api/exercise/products/:id`      | Cache-aside product lookup: serves from the in-memory cache on hit, otherwise fetches from the (simulated 2s-latency) DB and caches the result for 10s |
 | PUT    | `/api/exercise/products/:id`      | Updates a product directly in the DB and invalidates its cache entry                                                                                   |
 | GET    | `/api/exercise/cache/debug-dump`  | Dumps the full in-memory cache store, including remaining TTL per key                                                                                  |
+| POST   | `/api/exercise/ts-discriminated-union` | Takes an `Order` body and demonstrates TypeScript narrowing a discriminated union (`status: "pending" \| "shipped"`) so `trackingNumber` is only accessible on the `"shipped"` branch |
 | GET    | `/storage/<filename>`             | Serves static files placed in the `storage/` directory                                                                                                 |
 
 All `/api/exercise/*` routes are rate-limited (100 requests/minute per IP) — `cpu-heavy` and `file-io` are deliberately expensive, so this is a real abuse vector once the API is reachable publicly. `/healthz` is exempt, for use by container/orchestrator health probes.
@@ -117,8 +118,10 @@ src/
   helpers/result.helper.test.ts
   in-flight.ts                 # request coalescing (single-flight)
   in-flight.test.ts
+  interfaces/IOrder.ts         # Order shape as a flat interface (contrasted with types/order.ts)
   middleware/errorHandler.ts  # centralized error handler
   routes/                     # route definitions
+  types/order.ts               # Order type as a discriminated union
   types/product.ts            # Product type
   types/result.ts             # Result<T, E> discriminated union type
   websocket.ts                 # WebSocket server: EventEmitter-based price update broadcast

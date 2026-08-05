@@ -10,5 +10,9 @@ exerciseRouter.get("/file-io", ExerciseController.getFileIo);
 exerciseRouter.get("/products/:id", ExerciseController.getProduct);
 exerciseRouter.put("/products/:id", ExerciseController.updateProduct);
 exerciseRouter.get("/cache/debug-dump", ExerciseController.debugCache);
+exerciseRouter.post(
+  "/ts-discriminated-union",
+  ExerciseController.typeDiscriminatedUnion,
+);
 
 export default exerciseRouter;
