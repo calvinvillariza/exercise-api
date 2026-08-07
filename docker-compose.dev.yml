@@ -8,9 +8,40 @@ services:
       - "8686:8686"
     environment:
       - PORT=8686
+      - IDP_BASE_URL=http://idp:4000
+      - RESOURCE_API_URL=http://resource-api:5000
     volumes:
       - ./src:/app/src
       - ./tsconfig.json:/app/tsconfig.json
       - ./storage:/app/storage
       - /app/node_modules
     command: npm run dev
+    depends_on:
+      - idp
+      - resource-api
+
+  idp:
+    build:
+      context: .
+      target: mocks
+    container_name: idp-server-dev
+    command: node external/idp-server.js
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./external:/app/external
+
+  resource-api:
+    build:
+      context: .
+      target: mocks
+    container_name: resource-api-server-dev
+    command: node external/resource-api-server.js
+    environment:
+      - IDP_BASE_URL=http://idp:4000
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./external:/app/external
+    depends_on:
+      - idp

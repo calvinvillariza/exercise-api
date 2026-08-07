@@ -8,6 +8,10 @@ ENV NODE_ENV=development
 EXPOSE 8686
 CMD ["npm", "run", "dev"]
 
+# FROM deps AS mocks
+# COPY external ./external
+# EXPOSE 4000 5000
+
 FROM deps AS build
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src

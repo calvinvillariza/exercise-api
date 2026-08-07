@@ -42,6 +42,10 @@ npm test             # node:test, via tsx
 | PUT    | `/api/exercise/products/:id`      | Updates a product directly in the DB and invalidates its cache entry                                                                                   |
 | GET    | `/api/exercise/cache/debug-dump`  | Dumps the full in-memory cache store, including remaining TTL per key                                                                                  |
 | POST   | `/api/exercise/ts-discriminated-union` | Takes an `Order` body and demonstrates TypeScript narrowing a discriminated union (`status: "pending" \| "shipped"`) so `trackingNumber` is only accessible on the `"shipped"` branch |
+| POST   | `/api/exercise/login`             | Starts the OIDC demo flow: redirects to the mock IdP's `/authorize` endpoint with a fresh PKCE code challenge, `state`, and `nonce`                    |
+| GET    | `/api/exercise/callback`          | OIDC redirect target: exchanges the auth code for tokens, verifies the ID token against the IdP's JWKS, and sets an httpOnly `session_id` cookie       |
+| GET    | `/api/exercise/profile`           | Protected page: reads the session cookie, calls the mock resource API with the stored access token, and renders the result                            |
+| GET    | `/api/exercise/logout`            | Clears the session cookie                                                                                                                               |
 | GET    | `/storage/<filename>`             | Serves static files placed in the `storage/` directory                                                                                                 |
 
 All `/api/exercise/*` routes are rate-limited (100 requests/minute per IP) — `cpu-heavy` and `file-io` are deliberately expensive, so this is a real abuse vector once the API is reachable publicly. `/healthz` is exempt, for use by container/orchestrator health probes.
@@ -65,6 +69,29 @@ Run the server first, then in a separate terminal:
 ```bash
 node external/websocket-simulate-client.js                    # local
 NODE_ENV=production node external/websocket-simulate-client.js # live deployment
+```
+
+## SSO / OIDC demo
+
+`/api/exercise/login` through `/api/exercise/profile` walk through a real OIDC authorization-code + PKCE flow end to end, backed by two standalone mock services in `external/`:
+
+- `external/idp-server.js` — a mock Identity Provider (think Okta/Auth0). Implements `/authorize`, `/token`, and `/.well-known/jwks.json`, signs tokens with an RS256 key pair generated at startup, and auto-approves a fixed demo user (skips a real login UI, since the point of the exercise is the protocol, not a login form). Listens on port 4000.
+- `external/resource-api-server.js` — a mock "real" backend API, entirely separate from the IdP. Verifies an access token's signature locally against the IdP's JWKS instead of calling back to the IdP on every request, then serves `/me`. Listens on port 5000.
+
+`src/services/login.service.ts` holds the SP (service provider) side of the flow: PKCE/nonce tracking for in-flight logins and an in-memory session store, keyed by a `session_id` cookie.
+
+Since the flow starts with a POST (`/login`), you can't just type the URL into a browser's address bar to try it — trigger it via a form/button, or from the browser devtools console:
+
+```js
+fetch('/api/exercise/login', { method: 'POST' }).then((r) => (location.href = r.url));
+```
+
+Run both mock services locally alongside the API, each in its own terminal:
+
+```bash
+node external/idp-server.js
+node external/resource-api-server.js
+npm run dev
 ```
 
 ## Docker
@@ -121,6 +148,7 @@ src/
   interfaces/IOrder.ts         # Order shape as a flat interface (contrasted with types/order.ts)
   middleware/errorHandler.ts  # centralized error handler
   routes/                     # route definitions
+  services/login.service.ts   # SSO demo: PKCE/nonce tracking + in-memory sessions for the OIDC flow
   types/order.ts               # Order type as a discriminated union
   types/product.ts            # Product type
   types/result.ts             # Result<T, E> discriminated union type
@@ -130,5 +158,7 @@ src/
   server.ts                   # entrypoint, starts the HTTP server + WebSocket server, graceful shutdown
 storage/                      # static files served at /storage (gitignored, .gitkeep only)
 external/
+  idp-server.js                # mock OIDC Identity Provider for the SSO demo (port 4000)
+  resource-api-server.js       # mock resource API that verifies tokens from idp-server.js (port 5000)
   websocket-simulate-client.js # dev-only load-sim script, excluded from the Docker build
 ```

@@ -7,6 +7,10 @@ import { cache } from "../cache";
 import { DB_Product } from "../db/product";
 import { Inflight } from "../in-flight";
 import { Order } from "../types/order";
+import * as crypto from "crypto";
+import { LoginService } from "../services/login.service";
+import { URLSearchParams } from "url";
+import { jwtVerify } from "jose";
 
 const STORAGE_DIR = path.join(__dirname, "..", "..", "storage");
 
@@ -358,6 +362,176 @@ const typeDiscriminatedUnion = async (req: Request, res: Response) => {
   });
 };
 
+/** Step 1: User LOGIN */
+const login = async (req: Request, res: Response) => {
+  const state = LoginService.base64Url(crypto.randomBytes(16));
+  const nonce = LoginService.base64Url(crypto.randomBytes(16));
+  const codeVerifier = LoginService.base64Url(crypto.randomBytes(32));
+  const codeChallenge = crypto
+    .createHash("sha256")
+    .update(codeVerifier)
+    .digest("base64url");
+
+  LoginService.pendingLogins.set(state, {
+    codeVerifier,
+    nonce,
+    createdAt: Date.now(),
+  });
+
+  const authUrl = new URL(`${LoginService.IDP_ISSUER}/authorize`);
+
+  authUrl.searchParams.set("client_id", LoginService.CLIENT_ID);
+  authUrl.searchParams.set("redirect_uri", LoginService.REDIRECT_URI);
+  authUrl.searchParams.set("state", state);
+  authUrl.searchParams.set("nonce", nonce);
+  authUrl.searchParams.set("code_challenge", codeChallenge);
+  authUrl.searchParams.set("code_challenge_method", "S256");
+  authUrl.searchParams.set("scope", "openid profile");
+
+  console.log(`[SP] Redirect to IdP for login. state=${state}`);
+
+  res.redirect(authUrl.toString());
+};
+
+/** Step 2: IdP redirects the browser back here with a code */
+const loginCallback = async (req: Request, res: Response) => {
+  const { code, state } = req.query;
+
+  const pending = LoginService.pendingLogins.get(state);
+
+  if (!pending) {
+    return res
+      .status(400)
+      .send(
+        "Unknown or expired state - possible CSRF, or you refreshed this page.",
+      );
+  }
+
+  /** single-use, just like the auth code itself */
+  LoginService.pendingLogins.delete(state);
+
+  console.log("[SP] Callback received. Exchanging code tokens...");
+
+  const tokenRes = await fetch(`${LoginService.IDP_BASE_URL}/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code: code as string,
+      redirect_uri: LoginService.REDIRECT_URI,
+      client_id: LoginService.CLIENT_ID,
+      code_verifier: pending.codeVerifier, // proves WE started this flow
+    }),
+  });
+
+  if (!tokenRes.ok) {
+    const err = await tokenRes.json();
+    return res
+      .status(400)
+      .send(`Token exchange failed: ${JSON.stringify(err)}`);
+  }
+
+  const tokens = await tokenRes.json();
+
+  /** --- Validate the ID token ourselves - never trust it blindly --- */
+  const { payload: idTokenClaims } = await jwtVerify(
+    tokens.id_token,
+    LoginService.JWKS,
+    {
+      issuer: LoginService.IDP_ISSUER,
+      audience: LoginService.CLIENT_ID,
+    },
+  );
+
+  if (idTokenClaims.nonce !== pending.nonce) {
+    return res
+      .status(400)
+      .send("Nonce mismatch - possible replay attack. Rejecting lgoin.");
+  }
+
+  console.log(`[SP] ID token verified. Logged in as: ${idTokenClaims.email}`);
+
+  /** --- Create our own session, store tokens server-side --- */
+  const sessionId = LoginService.base64Url(crypto.randomBytes(24));
+
+  LoginService.sessions.set(sessionId, {
+    accessToken: tokens.access_token,
+    user: {
+      sub: idTokenClaims.sub,
+      name: idTokenClaims.name,
+      email: idTokenClaims.email,
+    },
+  });
+
+  /** httpOnly cookie — matches the lesson from the localStorage/cookie security
+   * question earlier: the access token itself never touches browser JS.
+   */
+  res.cookie("session_id", sessionId, { httpOnly: true, sameSite: "lax" });
+  res.redirect("/api/exercise/profile");
+};
+
+/** Step 3: a protected page that calls the resource API on the User's behalf */
+const getProfile = async (req: Request, res: Response) => {
+  const sessionId = req.cookies.session_id;
+  const session = LoginService.sessions.get(sessionId);
+
+  if (!session)
+    return res.status(401).send("Not logged in. Go to /login first.");
+
+  const apiRes = await fetch(`${LoginService.RESOURCE_API}/me`, {
+    headers: {
+      Authorization: `Bearer ${session.accessToken}`,
+    },
+  });
+
+  if (!apiRes.ok)
+    return res
+      .status(apiRes.status)
+      .send(`Resource API rejected our access token: ${await apiRes.text()}`);
+
+  const apiData = await apiRes.json();
+
+  /** `session.user`/`apiData` came from the IdP/resource API, not from this
+   * request, but they're still attacker-influenced (a hostile IdP or a
+   * compromised resource API could inject markup) — escape before
+   * interpolating into HTML to avoid a reflected-XSS-via-trusted-source bug.
+   */
+  const escapeHtml = (value: unknown) =>
+    String(value).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c]!,
+    );
+
+  res.send(`
+    <!doctype html>
+    <html>
+      <head><title>Profile</title></head>
+      <body>
+        <h1>Welcome, ${escapeHtml(session.user.name)}</h1>
+        <p>Email: ${escapeHtml(session.user.email)}</p>
+        <p>Subject: ${escapeHtml(session.user.sub)}</p>
+        <h2>Resource API data</h2>
+        <pre>${escapeHtml(JSON.stringify(apiData, null, 2))}</pre>
+
+        <p><a href="/api/exercise/logout">Log out</a></p>
+      </body>
+    </html>
+  `);
+};
+
+const logout = async (req: Request, res: Response) => {
+  LoginService.sessions.delete(req.cookies.session_id);
+  res.clearCookie("session_id");
+  res.send('Logged out. <a href="/api/exercise/login">Login in again</a>');
+};
+
 export const ExerciseController = {
   getNodeEventLoop,
   getCpuHeavy,
@@ -367,4 +541,8 @@ export const ExerciseController = {
   updateProduct,
   debugCache,
   typeDiscriminatedUnion,
+  login,
+  getProfile,
+  logout,
+  loginCallback,
 };

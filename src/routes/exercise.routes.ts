@@ -14,5 +14,9 @@ exerciseRouter.post(
   "/ts-discriminated-union",
   ExerciseController.typeDiscriminatedUnion,
 );
+exerciseRouter.post("/login", ExerciseController.login);
+exerciseRouter.get("/callback", ExerciseController.loginCallback);
+exerciseRouter.get("/profile", ExerciseController.getProfile);
+exerciseRouter.get("/logout", ExerciseController.logout);
 
 export default exerciseRouter;
